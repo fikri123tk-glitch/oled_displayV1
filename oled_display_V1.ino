@@ -1,8 +1,9 @@
-include <Wire.h>
+#include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <math.h>
 #include "esp_sleep.h"
+
 
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 64
@@ -272,38 +273,139 @@ void drawChibiEye(int16_t cx, int16_t cy, int8_t dx, int8_t dy, bool blinking, b
 // ══════════════════════════════════════════════════════════
 //  ANIMASI BIRTHDAY
 // ══════════════════════════════════════════════════════════
+// Gambar bunga pixel kecil (pengganti emoji 🌼)
+void drawPixelFlower(int x, int y) {
+  // Kelopak 4 arah
+  display.drawPixel(x,   y-2, SSD1306_WHITE);
+  display.drawPixel(x,   y+2, SSD1306_WHITE);
+  display.drawPixel(x-2, y,   SSD1306_WHITE);
+  display.drawPixel(x+2, y,   SSD1306_WHITE);
+  // Diagonal
+  display.drawPixel(x-1, y-1, SSD1306_WHITE);
+  display.drawPixel(x+1, y-1, SSD1306_WHITE);
+  display.drawPixel(x-1, y+1, SSD1306_WHITE);
+  display.drawPixel(x+1, y+1, SSD1306_WHITE);
+  // Inti
+  display.drawPixel(x, y, SSD1306_WHITE);
+}
+
 void animasiHBD() {
-  int textY = -20;
-  while (textY < 20) {
+  // ── FASE 1: Happy Birthday + nama jatuh dari atas ──────
+  int textY = -40;
+  while (textY < 10) {
     handleTouch();
     if (currentState != STATE_BIRTHDAY) return;
     display.clearDisplay();
-    for (int i = 0; i < 10; i++)
+
+    // Bintang background
+    for (int i = 0; i < 8; i++)
       display.drawPixel(rand() % 128, rand() % 64, SSD1306_WHITE);
-    display.setTextSize(2);
+
     display.setTextColor(SSD1306_WHITE);
-    display.setCursor(15, textY);
-    display.print("HAPPY");
-    display.setCursor(10, textY + 18);
-    display.print("BIRTHDAY!");
+
+    // "Happy Birthday" size 1 biar muat dengan nama
+    display.setTextSize(1);
+    display.setCursor(22, textY);
+    display.print("* Happy Birthday *");
+
+    // Nama size 2 lebih besar & menonjol
+    display.setTextSize(2);
+    display.setCursor(20, textY + 14);
+    display.print("Nama kalian");
+
+    // Bunga pixel di kanan nama
+    if (textY + 20 < 64 && textY + 20 >= 0)
+      drawPixelFlower(105, textY + 22);
+
     display.display();
     textY += 2;
-    delay(15);
+    delay(18);
   }
 
-  for (int i = 0; i < 20; i++) {
+  // ── FASE 2: Teks bergetar + bingkai ────────────────────
+  for (int i = 0; i < 25; i++) {
     handleTouch();
     if (currentState != STATE_BIRTHDAY) return;
     display.clearDisplay();
+
     int offset = (i % 2 == 0) ? 1 : 0;
+
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(22 + offset, 10);
+    display.print("* Happy Birthday *");
+
     display.setTextSize(2);
-    display.setCursor(15 + offset, 20);
-    display.print("HAPPY");
-    display.setCursor(10 - offset, 38);
-    display.print("BIRTHDAY!");
+    display.setCursor(20 - offset, 24);
+    display.print("Nama kalian");
+
+    // Bunga pixel
+    drawPixelFlower(105, 32);
+    drawPixelFlower(8,   32);
+
+    // Bingkai berkedip
     display.drawRect(2, 2, 124, 60, SSD1306_WHITE);
+    if (i % 2 == 0)
+      display.drawRect(4, 4, 120, 56, SSD1306_WHITE);
+
     display.display();
     delay(100);
+  }
+
+  // ── FASE 3: Pesan "Keep growing..." muncul per kata ────
+  // Tampilkan 3 detik dengan efek muncul bertahap
+  const char* line1 = "Keep growing,";
+  const char* line2 = "the world";
+  const char* line3 = "needs your light.";
+
+  // Hitung total karakter untuk timing
+  int totalChars = strlen(line1) + strlen(line2) + strlen(line3);
+
+  for (int frame = 0; frame <= totalChars + 20; frame++) {
+    handleTouch();
+    if (currentState != STATE_BIRTHDAY) return;
+
+    display.clearDisplay();
+
+    // Bintang kecil di background
+    srand(42); // seed tetap supaya bintang tidak bergerak
+    for (int i = 0; i < 6; i++)
+      display.drawPixel(rand() % 128, rand() % 20, SSD1306_WHITE);
+
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+
+    // Line 1
+    int show1 = min(frame, (int)strlen(line1));
+    display.setCursor(10, 20);
+    for (int c = 0; c < show1; c++) display.print(line1[c]);
+
+    // Line 2
+    int show2 = min(max(0, frame - (int)strlen(line1)), (int)strlen(line2));
+    display.setCursor(22, 34);
+    for (int c = 0; c < show2; c++) display.print(line2[c]);
+
+    // Line 3
+    int show3 = min(max(0, frame - (int)strlen(line1) - (int)strlen(line2)), (int)strlen(line3));
+    display.setCursor(4, 48);
+    for (int c = 0; c < show3; c++) display.print(line3[c]);
+
+    // Bunga kecil di pojok saat semua teks muncul
+    if (frame >= totalChars) {
+      drawPixelFlower(118, 20);
+      drawPixelFlower(4,   55);
+    }
+
+    display.display();
+    delay(60);
+  }
+
+  // Tahan pesan 2 detik
+  uint32_t holdMsg = millis();
+  while (millis() - holdMsg < 2000) {
+    handleTouch();
+    if (currentState != STATE_BIRTHDAY) return;
+    delay(20);
   }
 }
 
